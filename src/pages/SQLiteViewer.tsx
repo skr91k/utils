@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { useSEO } from '../utils/useSEO'
 
 declare global {
   interface Window {
@@ -7,6 +8,12 @@ declare global {
 }
 
 export function SQLiteViewer() {
+  useSEO({
+    title: 'SQLite Database Viewer',
+    description: 'View and query SQLite database files online. Browse tables, run SQL queries, and export data. No upload required - works entirely in browser.',
+    keywords: 'sqlite, database viewer, sql query, db browser, sqlite online, database tool',
+  });
+
   const [loading, setLoading] = useState(false)
   const [loadingText, setLoadingText] = useState('')
   const [dbInfo, setDbInfo] = useState('')

@@ -1,8 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import { useSEO } from '../utils/useSEO'
 import './Counter.css'
 
 function Counter() {
+  useSEO({
+    title: 'Tally Counter',
+    description: 'Simple digital tally counter with customizable cooldown. Perfect for counting people, inventory, or any repetitive counting task. Persistent count saved locally.',
+    keywords: 'counter, tally counter, click counter, people counter, digital counter, counting app',
+  });
+
   const [count, setCount] = useState(() => {
     const savedCount = localStorage.getItem('counter_count');
     return savedCount ? parseInt(savedCount, 10) : 0;

@@ -14,6 +14,7 @@ import {
   type CalculationMethod,
 } from '../utils/prayerTime';
 import { CITIES, searchCities, formatCityDisplay, type City } from '../data/cities';
+import { useSEO } from '../utils/useSEO';
 
 type ViewMode = 'home' | 'location' | 'month' | 'settings';
 
@@ -49,6 +50,12 @@ const DEFAULT_CITY: City = {
 };
 
 export const PrayerTime = () => {
+  useSEO({
+    title: 'Islamic Prayer Times',
+    description: 'Accurate Islamic prayer times with multiple calculation methods, iqama countdown, monthly calendar, and location-based timing for Fajr, Sunrise, Zuhr, Asr, Maghrib, and Isha.',
+    keywords: 'prayer times, salah, namaz, fajr, zuhr, asr, maghrib, isha, islamic, muslim, adhan, iqama',
+  });
+
   const [viewMode, setViewMode] = useState<ViewMode>('home');
   const [location, setLocation] = useState<Location>(DEFAULT_LOCATION);
   const [selectedCity, setSelectedCity] = useState<City>(DEFAULT_CITY);

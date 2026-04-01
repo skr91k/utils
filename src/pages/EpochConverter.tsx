@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react'
+import { useSEO } from '../utils/useSEO'
 
 export function EpochConverter() {
+  useSEO({
+    title: 'Epoch Timestamp Converter',
+    description: 'Convert Unix epoch timestamps to human-readable dates and vice versa. Support for seconds and milliseconds. Live epoch clock included.',
+    keywords: 'epoch, timestamp, unix time, date converter, milliseconds, seconds, time conversion',
+  });
+
   const [currentEpoch, setCurrentEpoch] = useState(Math.floor(Date.now() / 1000))
   const [timestampInput, setTimestampInput] = useState('')
   const [timestampUnit, setTimestampUnit] = useState('seconds')

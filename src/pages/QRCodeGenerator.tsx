@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSEO } from '../utils/useSEO'
 
 declare global {
   interface Window {
@@ -7,6 +8,12 @@ declare global {
 }
 
 export function QRCodeGenerator() {
+  useSEO({
+    title: 'QR Code Generator',
+    description: 'Free online QR code generator. Create QR codes for URLs, text, WiFi, and more. Download in various sizes instantly.',
+    keywords: 'qr code, qr generator, barcode, scan code, url to qr, free qr code',
+  });
+
   const [text, setText] = useState('')
   const [size, setSize] = useState(200)
   const [error, setError] = useState('')

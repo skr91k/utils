@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSEO } from '../utils/useSEO'
 
 declare global {
   interface Window {
@@ -7,6 +8,12 @@ declare global {
 }
 
 export function Encryption() {
+  useSEO({
+    title: 'Text Encryption & Decryption',
+    description: 'Encrypt and decrypt text using AES, DES, Triple DES, and Rabbit algorithms. Secure client-side encryption with customizable secret keys.',
+    keywords: 'encryption, decryption, aes, des, triple des, rabbit, cipher, secure text, crypto',
+  });
+
   const [operation, setOperation] = useState<'encrypt' | 'decrypt'>('encrypt')
   const [algorithm, setAlgorithm] = useState('aes')
   const [secret, setSecret] = useState('')

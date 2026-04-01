@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSEO } from '../utils/useSEO'
 
 declare global {
   interface Window {
@@ -21,6 +22,12 @@ const Btn = ({ onClick, children }: { onClick: () => void; children: React.React
 )
 
 export function StringConverts() {
+  useSEO({
+    title: 'String Converter & Encoder',
+    description: 'Convert strings between Base64, URL encoding, HTML entities, and more. Generate MD5, SHA1, SHA256 hashes. Case conversion and text utilities.',
+    keywords: 'base64, url encode, html encode, md5, sha1, sha256, hash, string converter, text tools',
+  });
+
   const [base64Input, setBase64Input] = useState('')
   const [base64Output, setBase64Output] = useState('')
   const [urlSafeInput, setUrlSafeInput] = useState('')
