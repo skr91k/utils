@@ -15,11 +15,23 @@ import {
 } from '../utils/prayerTime';
 import { CITIES, searchCities, formatCityDisplay, type City } from '../data/cities';
 
-type ViewMode = 'home' | 'location' | 'month';
+type ViewMode = 'home' | 'location' | 'month' | 'settings';
 
 // Storage keys
 const STORAGE_KEY_LOCATION = 'prayertime_location';
 const STORAGE_KEY_METHOD = 'prayertime_method';
+const STORAGE_KEY_ADJUSTMENT = 'prayertime_adjustment';
+const STORAGE_KEY_IQAMA = 'prayertime_iqama';
+
+// Default iqama times in minutes after adhan
+const DEFAULT_IQAMA_TIMES: Record<string, number> = {
+  fajr: 20,
+  sunrise: 10, // For Ishraq prayer
+  zuhr: 20,
+  asr: 20,
+  maghrib: 5,
+  isha: 20,
+};
 
 // Default location (Makkah)
 const DEFAULT_LOCATION: Location = {
@@ -49,6 +61,17 @@ export const PrayerTime = () => {
   const [searchResults, setSearchResults] = useState<City[]>([]);
   const [monthDate, setMonthDate] = useState(new Date());
   const [monthPrayerTimes, setMonthPrayerTimes] = useState<{ date: Date; times: PrayerTimes }[]>([]);
+  const [timeAdjustments, setTimeAdjustments] = useState<Record<string, number>>({
+    fajr: 0,
+    sunrise: 0,
+    zuhr: 0,
+    asr: 0,
+    maghrib: 0,
+    isha: 0,
+  }); // minutes to add/subtract per prayer
+  const [iqamaTimes, setIqamaTimes] = useState<Record<string, number>>({ ...DEFAULT_IQAMA_TIMES });
+  const [countdownPhase, setCountdownPhase] = useState<'adhan' | 'iqama' | 'elapsed'>('adhan');
+  const [currentPhasePrayer, setCurrentPhasePrayer] = useState<string>(''); // Which prayer is in iqama/elapsed phase
 
   // Sort cities by distance from current location
   const nearbyCities = useMemo(() => {
@@ -142,6 +165,24 @@ export const PrayerTime = () => {
         setMethod(CALCULATION_METHODS[methodKey]);
       }
     }
+
+    const savedAdjustments = localStorage.getItem(STORAGE_KEY_ADJUSTMENT);
+    if (savedAdjustments) {
+      try {
+        setTimeAdjustments(JSON.parse(savedAdjustments));
+      } catch {
+        // ignore parse errors
+      }
+    }
+
+    const savedIqama = localStorage.getItem(STORAGE_KEY_IQAMA);
+    if (savedIqama) {
+      try {
+        setIqamaTimes({ ...DEFAULT_IQAMA_TIMES, ...JSON.parse(savedIqama) });
+      } catch {
+        // ignore parse errors
+      }
+    }
   }, [fetchIPLocation]);
 
   // Calculate prayer times when location or method changes
@@ -149,29 +190,6 @@ export const PrayerTime = () => {
     const times = calculatePrayerTimes(currentDate, location, method);
     setPrayerTimes(times);
   }, [location, method, currentDate]);
-
-  // Update countdown every second
-  useEffect(() => {
-    if (!prayerTimes) return;
-
-    const updateCountdown = () => {
-      const nextPrayer = getNextPrayer(prayerTimes);
-      if (nextPrayer) {
-        setCountdown(getTimeDifference(nextPrayer.time));
-      } else {
-        // Next prayer is tomorrow's Fajr
-        const tomorrow = new Date(currentDate);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowTimes = calculatePrayerTimes(tomorrow, location, method);
-        setCountdown(getTimeDifference(tomorrowTimes.fajr));
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-
-    return () => clearInterval(interval);
-  }, [prayerTimes, currentDate, location, method]);
 
   // Update current date at midnight
   useEffect(() => {
@@ -238,6 +256,31 @@ export const PrayerTime = () => {
     }
   }, []);
 
+  const handleAdjustmentChange = useCallback((prayer: string, delta: number) => {
+    setTimeAdjustments(prev => {
+      const newAdjustments = { ...prev, [prayer]: (prev[prayer] || 0) + delta };
+      localStorage.setItem(STORAGE_KEY_ADJUSTMENT, JSON.stringify(newAdjustments));
+      return newAdjustments;
+    });
+  }, []);
+
+  const handleIqamaChange = useCallback((prayer: string, value: number) => {
+    const newValue = Math.max(1, value); // Don't allow less than 1
+    setIqamaTimes(prev => {
+      const newIqama = { ...prev, [prayer]: newValue };
+      localStorage.setItem(STORAGE_KEY_IQAMA, JSON.stringify(newIqama));
+      return newIqama;
+    });
+  }, []);
+
+  // Apply time adjustment to a Date for a specific prayer
+  const applyAdjustment = useCallback((time: Date, prayer: string): Date => {
+    const adjustment = timeAdjustments[prayer] || 0;
+    if (adjustment === 0) return time;
+    const adjusted = new Date(time.getTime() + adjustment * 60 * 1000); // minutes to ms
+    return adjusted;
+  }, [timeAdjustments]);
+
   // Get device/browser location
   const getDeviceLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -292,6 +335,41 @@ export const PrayerTime = () => {
     return `${h}:${m}:${s}`;
   };
 
+  // Get display text for countdown based on phase
+  const getCountdownText = () => {
+    const prayerDisplayNames: Record<string, string> = {
+      fajr: 'Fajr',
+      sunrise: 'Ishraq',
+      zuhr: 'Zuhr',
+      asr: 'Asr',
+      maghrib: 'Maghrib',
+      isha: 'Isha',
+    };
+
+    if (countdownPhase === 'iqama') {
+      const name = prayerDisplayNames[currentPhasePrayer] || '';
+      if (currentPhasePrayer === 'sunrise') {
+        return `${name} Prayer`;
+      }
+      return `${name} Iqama`;
+    } else if (countdownPhase === 'elapsed') {
+      const name = prayerDisplayNames[currentPhasePrayer] || '';
+      return `${name} Started`;
+    } else {
+      return nextPrayer ? `Next: ${nextPrayer.name}` : "Tomorrow's Fajr";
+    }
+  };
+
+  // Get countdown colors based on phase
+  const getCountdownColors = () => {
+    if (countdownPhase === 'iqama') {
+      return 'from-green-500 to-green-600'; // Green for iqama countdown
+    } else if (countdownPhase === 'elapsed') {
+      return 'from-red-500 to-red-600'; // Red for elapsed time
+    }
+    return 'from-[#667eea] to-[#764ba2]'; // Default purple
+  };
+
   const getHijriDate = () => {
     const gregorian = new Date();
     const options: Intl.DateTimeFormatOptions = {
@@ -313,9 +391,99 @@ export const PrayerTime = () => {
     setMonthDate(newDate);
   };
 
-  const nextPrayer = prayerTimes ? getNextPrayer(prayerTimes) : null;
-  const currentPrayer = prayerTimes ? getCurrentPrayer(prayerTimes) : null;
-  const times = prayerTimes ? [prayerTimes.fajr, prayerTimes.sunrise, prayerTimes.zuhr, prayerTimes.asr, prayerTimes.maghrib, prayerTimes.isha] : [];
+  // Apply adjustment to prayer times for display
+  const adjustedPrayerTimes = useMemo(() => {
+    if (!prayerTimes) return null;
+    return {
+      fajr: applyAdjustment(prayerTimes.fajr, 'fajr'),
+      sunrise: applyAdjustment(prayerTimes.sunrise, 'sunrise'),
+      zuhr: applyAdjustment(prayerTimes.zuhr, 'zuhr'),
+      asr: applyAdjustment(prayerTimes.asr, 'asr'),
+      maghrib: applyAdjustment(prayerTimes.maghrib, 'maghrib'),
+      isha: applyAdjustment(prayerTimes.isha, 'isha'),
+    };
+  }, [prayerTimes, applyAdjustment]);
+
+  // Update countdown every second with iqama phases
+  useEffect(() => {
+    if (!adjustedPrayerTimes) return;
+
+    const prayerKeys = ['fajr', 'sunrise', 'zuhr', 'asr', 'maghrib', 'isha'];
+
+    const updateCountdown = () => {
+      const now = new Date();
+      const timesArr = [
+        adjustedPrayerTimes.fajr,
+        adjustedPrayerTimes.sunrise,
+        adjustedPrayerTimes.zuhr,
+        adjustedPrayerTimes.asr,
+        adjustedPrayerTimes.maghrib,
+        adjustedPrayerTimes.isha,
+      ];
+
+      // Find current prayer state
+      for (let i = timesArr.length - 1; i >= 0; i--) {
+        const adhanTime = timesArr[i];
+        const iqamaMinutes = iqamaTimes[prayerKeys[i]] || 20;
+        const iqamaTime = new Date(adhanTime.getTime() + iqamaMinutes * 60 * 1000);
+        const elapsedEndTime = new Date(iqamaTime.getTime() + 10 * 60 * 1000); // 10 min after iqama
+
+        if (now >= adhanTime) {
+          // We're past this prayer's adhan
+          if (now < iqamaTime) {
+            // Phase: Countdown to Iqama (green)
+            const diff = iqamaTime.getTime() - now.getTime();
+            const totalSeconds = Math.floor(diff / 1000);
+            setCountdown({
+              hours: Math.floor(totalSeconds / 3600),
+              minutes: Math.floor((totalSeconds % 3600) / 60),
+              seconds: totalSeconds % 60,
+            });
+            setCountdownPhase('iqama');
+            setCurrentPhasePrayer(prayerKeys[i]);
+            return;
+          } else if (prayerKeys[i] !== 'sunrise' && now < elapsedEndTime) {
+            // Phase: Count up after iqama (red) - not for sunrise
+            const diff = now.getTime() - iqamaTime.getTime();
+            const totalSeconds = Math.floor(diff / 1000);
+            setCountdown({
+              hours: Math.floor(totalSeconds / 3600),
+              minutes: Math.floor((totalSeconds % 3600) / 60),
+              seconds: totalSeconds % 60,
+            });
+            setCountdownPhase('elapsed');
+            setCurrentPhasePrayer(prayerKeys[i]);
+            return;
+          }
+          // Past the elapsed period, continue to check next prayer
+        }
+      }
+
+      // No active iqama/elapsed phase, show countdown to next adhan
+      const next = getNextPrayer(adjustedPrayerTimes);
+      if (next) {
+        setCountdown(getTimeDifference(next.time));
+      } else {
+        // Next prayer is tomorrow's Fajr
+        const tomorrow = new Date(currentDate);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowTimes = calculatePrayerTimes(tomorrow, location, method);
+        const adjustedFajr = applyAdjustment(tomorrowTimes.fajr, 'fajr');
+        setCountdown(getTimeDifference(adjustedFajr));
+      }
+      setCountdownPhase('adhan');
+      setCurrentPhasePrayer('');
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [adjustedPrayerTimes, currentDate, location, method, iqamaTimes, applyAdjustment]);
+
+  const nextPrayer = adjustedPrayerTimes ? getNextPrayer(adjustedPrayerTimes) : null;
+  const currentPrayer = adjustedPrayerTimes ? getCurrentPrayer(adjustedPrayerTimes) : null;
+  const times = adjustedPrayerTimes ? [adjustedPrayerTimes.fajr, adjustedPrayerTimes.sunrise, adjustedPrayerTimes.zuhr, adjustedPrayerTimes.asr, adjustedPrayerTimes.maghrib, adjustedPrayerTimes.isha] : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#667eea] to-[#764ba2] dark:from-gray-900 dark:to-gray-800 py-8 px-4">
@@ -327,17 +495,15 @@ export const PrayerTime = () => {
             {viewMode === 'home' && 'Daily Prayer Schedule'}
             {viewMode === 'location' && 'Select Location'}
             {viewMode === 'month' && 'Monthly Calendar'}
+            {viewMode === 'settings' && 'Settings'}
           </p>
         </div>
 
         {/* Home View */}
         {viewMode === 'home' && prayerTimes && (
           <div className="space-y-6">
-            {/* Location Header */}
-            <div
-              className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 cursor-pointer hover:shadow-xl transition-shadow"
-              onClick={() => setViewMode('location')}
-            >
+            {/* Location Header with Settings Gear */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">Location</p>
@@ -345,10 +511,15 @@ export const PrayerTime = () => {
                     {selectedCity.name}, {selectedCity.country}
                   </h2>
                 </div>
-                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+                <button
+                  onClick={() => setViewMode('settings')}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <svg className="w-6 h-6 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
               </div>
             </div>
 
@@ -361,15 +532,18 @@ export const PrayerTime = () => {
             </div>
 
             {/* Next Prayer Countdown */}
-            <div className="bg-gradient-to-br from-[#667eea] to-[#764ba2] rounded-2xl shadow-lg p-6 text-white text-center">
+            <div className={`bg-gradient-to-br ${getCountdownColors()} rounded-2xl shadow-lg p-6 text-white text-center`}>
               <p className="text-sm opacity-80 mb-1">
-                {nextPrayer ? `Next: ${nextPrayer.name}` : "Tomorrow's Fajr"}
+                {getCountdownText()}
               </p>
               <p className="text-5xl font-bold font-mono tracking-wider">{formatCountdown()}</p>
-              {nextPrayer && (
+              {countdownPhase === 'adhan' && nextPrayer && (
                 <p className="text-lg mt-2 opacity-90">
                   {formatTime(nextPrayer.time, use24Hour)}
                 </p>
+              )}
+              {countdownPhase === 'elapsed' && (
+                <p className="text-sm mt-2 opacity-80">Time since iqama</p>
               )}
             </div>
 
@@ -405,7 +579,7 @@ export const PrayerTime = () => {
               })}
             </div>
 
-            {/* Settings Row */}
+            {/* Action Buttons */}
             <div className="flex gap-3">
               <button
                 onClick={() => setViewMode('month')}
@@ -428,48 +602,6 @@ export const PrayerTime = () => {
                   {use24Hour ? '12 Hour' : '24 Hour'}
                 </p>
               </button>
-            </div>
-
-            {/* Method Selector */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                Calculation Method
-              </label>
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {Object.entries(CALCULATION_METHODS).map(([key, m]) => {
-                  const isSelected = method.name === m.name;
-                  const ishaText = m.ishaInterval ? `${m.ishaInterval} min` : `${m.ishaAngle}°`;
-                  const madhabText = m.madhhab === 1 ? 'Shafi' : 'Hanafi';
-
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => handleMethodChange(key)}
-                      className={`w-full text-left p-3 rounded-lg border transition-all ${
-                        isSelected
-                          ? 'border-[#667eea] bg-[#667eea]/10'
-                          : 'border-gray-200 dark:border-gray-600 hover:border-[#667eea]/50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`font-medium ${isSelected ? 'text-[#667eea]' : 'text-gray-900 dark:text-white'}`}>
-                          {m.name}
-                        </span>
-                        {isSelected && (
-                          <svg className="w-5 h-5 text-[#667eea]" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="flex gap-4 mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        <span>Fajr: {m.fajrAngle}°</span>
-                        <span>Isha: {ishaText}</span>
-                        <span>Asr: {madhabText}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
             </div>
           </div>
         )}
@@ -553,6 +685,169 @@ export const PrayerTime = () => {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Settings View */}
+        {viewMode === 'settings' && (
+          <div className="space-y-4">
+            {/* Back Button */}
+            <button
+              onClick={() => setViewMode('home')}
+              className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back
+            </button>
+
+            {/* Location Setting */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Location</p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {selectedCity.name}, {selectedCity.country}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setViewMode('location')}
+                  className="px-4 py-2 bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white rounded-lg hover:opacity-90 transition-opacity"
+                >
+                  Change
+                </button>
+              </div>
+            </div>
+
+            {/* Time Adjustment */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Time Adjustment
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                Adjust each prayer time by minutes
+              </p>
+              <div className="space-y-3">
+                {[
+                  { key: 'fajr', name: 'Fajr' },
+                  { key: 'sunrise', name: 'Sunrise' },
+                  { key: 'zuhr', name: 'Zuhr' },
+                  { key: 'asr', name: 'Asr' },
+                  { key: 'maghrib', name: 'Maghrib' },
+                  { key: 'isha', name: 'Isha' },
+                ].map(({ key, name }) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-gray-700 dark:text-gray-300 font-medium w-20">{name}</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleAdjustmentChange(key, -1)}
+                        className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 transition-colors"
+                      >
+                        -
+                      </button>
+                      <span className={`w-12 text-center font-mono text-lg ${timeAdjustments[key] !== 0 ? 'text-[#667eea] font-bold' : 'text-gray-500 dark:text-gray-400'}`}>
+                        {timeAdjustments[key] > 0 ? '+' : ''}{timeAdjustments[key]}
+                      </span>
+                      <button
+                        onClick={() => handleAdjustmentChange(key, 1)}
+                        className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-xl font-bold text-gray-700 dark:text-gray-300 transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Iqama Time */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Iqama Time
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                Minutes after adhan for iqama (Sunrise shows Ishraq time)
+              </p>
+              <div className="space-y-3">
+                {[
+                  { key: 'fajr', name: 'Fajr' },
+                  { key: 'sunrise', name: 'Ishraq' },
+                  { key: 'zuhr', name: 'Zuhr' },
+                  { key: 'asr', name: 'Asr' },
+                  { key: 'maghrib', name: 'Maghrib' },
+                  { key: 'isha', name: 'Isha' },
+                ].map(({ key, name }) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-gray-700 dark:text-gray-300 font-medium w-20">{name}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleIqamaChange(key, iqamaTimes[key] - 1)}
+                        className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-lg font-bold text-gray-700 dark:text-gray-300 transition-colors"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        value={iqamaTimes[key]}
+                        onChange={(e) => handleIqamaChange(key, parseInt(e.target.value, 10) || 1)}
+                        className="w-14 text-center font-mono text-lg bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg py-1 text-gray-900 dark:text-white"
+                      />
+                      <button
+                        onClick={() => handleIqamaChange(key, iqamaTimes[key] + 1)}
+                        className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-lg font-bold text-gray-700 dark:text-gray-300 transition-colors"
+                      >
+                        +
+                      </button>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 w-8">min</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Calculation Method */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Calculation Method
+              </label>
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {Object.entries(CALCULATION_METHODS).map(([key, m]) => {
+                  const isSelected = method.name === m.name;
+                  const ishaText = m.ishaInterval ? `${m.ishaInterval} min` : `${m.ishaAngle}°`;
+                  const madhabText = m.madhhab === 1 ? 'Shafi' : 'Hanafi';
+
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => handleMethodChange(key)}
+                      className={`w-full text-left p-3 rounded-lg border transition-all ${
+                        isSelected
+                          ? 'border-[#667eea] bg-[#667eea]/10'
+                          : 'border-gray-200 dark:border-gray-600 hover:border-[#667eea]/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`font-medium ${isSelected ? 'text-[#667eea]' : 'text-gray-900 dark:text-white'}`}>
+                          {m.name}
+                        </span>
+                        {isSelected && (
+                          <svg className="w-5 h-5 text-[#667eea]" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex gap-4 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        <span>Fajr: {m.fajrAngle}°</span>
+                        <span>Isha: {ishaText}</span>
+                        <span>Asr: {madhabText}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 
