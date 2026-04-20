@@ -47,6 +47,13 @@ export const DEFAULT_TASK: CounterTask = {
   createdAt: 0,
 };
 
+// Default adhkar tasks for new users (editable/deletable)
+const DEFAULT_ADHKAR = [
+  { name: 'أستغفر الله', targetCount: 100, countAtOnce: 1 },
+  { name: 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ', targetCount: 100, countAtOnce: 1 },
+  { name: 'لَا إِلٰهَ إِلَّا اللّٰهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ', targetCount: 100, countAtOnce: 1 },
+];
+
 // Tasks CRUD
 export const getUserTasksRef = (userId: string) =>
   collection(firestore, 'users', userId, 'counterTasks');
@@ -60,10 +67,27 @@ export const fetchUserTasks = async (userId: string): Promise<CounterTask[]> => 
     const snapshot = await getDocs(tasksRef);
     const tasks: CounterTask[] = [DEFAULT_TASK];
 
-    snapshot.forEach((doc) => {
-      const data = doc.data() as Omit<CounterTask, 'id'>;
-      tasks.push({ ...data, id: doc.id });
+    let hasActualTasks = false;
+    snapshot.forEach((docSnap) => {
+      // Skip the flag document
+      if (docSnap.id === '_adhkarCreated') return;
+      hasActualTasks = true;
+      const data = docSnap.data() as Omit<CounterTask, 'id'>;
+      tasks.push({ ...data, id: docSnap.id });
     });
+
+    // Check if default adhkar were already created
+    const adhkarCreated = await getDefaultAdhkarCreatedFlag(userId);
+
+    if (!hasActualTasks && !adhkarCreated) {
+      // First time user - create default adhkar
+      const createdTasks = await createDefaultAdhkar(userId);
+      tasks.push(...createdTasks);
+      await setDefaultAdhkarCreatedFlag(userId);
+    } else if (hasActualTasks && !adhkarCreated) {
+      // Existing user with tasks but no flag - set the flag (migration)
+      await setDefaultAdhkarCreatedFlag(userId);
+    }
 
     return tasks.sort((a, b) => {
       if (a.isDefault) return -1;
@@ -74,6 +98,57 @@ export const fetchUserTasks = async (userId: string): Promise<CounterTask[]> => 
     console.error('Error fetching tasks:', error);
     return [DEFAULT_TASK];
   }
+};
+
+const getDefaultAdhkarCreatedFlag = async (userId: string): Promise<boolean> => {
+  try {
+    // Store flag in counterTasks collection as a special document (same rules as tasks)
+    const flagRef = doc(firestore, 'users', userId, 'counterTasks', '_adhkarCreated');
+    const snapshot = await getDoc(flagRef);
+    return snapshot.exists() && snapshot.data()?.created === true;
+  } catch (error) {
+    console.error('Error getting adhkar flag:', error);
+    return false;
+  }
+};
+
+const setDefaultAdhkarCreatedFlag = async (userId: string): Promise<void> => {
+  try {
+    const flagRef = doc(firestore, 'users', userId, 'counterTasks', '_adhkarCreated');
+    await setDoc(flagRef, { created: true, createdAt: Date.now(), isFlag: true });
+  } catch (error) {
+    console.error('Error setting adhkar flag:', error);
+  }
+};
+
+const createDefaultAdhkar = async (userId: string): Promise<CounterTask[]> => {
+  const createdTasks: CounterTask[] = [];
+  const tasksRef = getUserTasksRef(userId);
+
+  for (let i = 0; i < DEFAULT_ADHKAR.length; i++) {
+    const adhkar = DEFAULT_ADHKAR[i];
+    const newTaskRef = doc(tasksRef);
+    const newTask: CounterTask = {
+      id: newTaskRef.id,
+      name: adhkar.name,
+      targetCount: adhkar.targetCount,
+      countAtOnce: adhkar.countAtOnce,
+      isDefault: false,
+      createdAt: Date.now() + i, // Offset to maintain order
+    };
+
+    await setDoc(newTaskRef, {
+      name: newTask.name,
+      targetCount: newTask.targetCount,
+      countAtOnce: newTask.countAtOnce,
+      isDefault: false,
+      createdAt: newTask.createdAt,
+    });
+
+    createdTasks.push(newTask);
+  }
+
+  return createdTasks;
 };
 
 export const createTask = async (userId: string, task: Omit<CounterTask, 'id' | 'isDefault' | 'createdAt'>): Promise<CounterTask> => {

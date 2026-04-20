@@ -476,8 +476,8 @@
 .calendar-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 24px;
 }
 
 .calendar-header h2 {
@@ -487,13 +487,14 @@
 }
 
 .calendar-header .back-btn {
-  padding: 8px;
+  padding: 0;
   background: transparent;
   border: none;
   color: #646cff;
   cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .calendar-header .back-btn:hover {
@@ -574,7 +575,7 @@
 }
 
 .day-count {
-  color: #4caf50;
+  color: #fff;
   font-size: 0.65rem;
   position: absolute;
   bottom: 2px;

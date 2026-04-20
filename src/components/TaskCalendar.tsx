@@ -11,6 +11,7 @@ interface TaskCalendarProps {
 
 export function TaskCalendar({ task, progress, onMonthChange, onSelectDate, onBack }: TaskCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [confirmDate, setConfirmDate] = useState<string | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -77,6 +78,20 @@ export function TaskCalendar({ task, progress, onMonthChange, onSelectDate, onBa
     setCurrentDate(new Date(year, month + 1, 1));
   };
 
+  const handleDateClick = (day: number) => {
+    const dateStr = getDateString(day);
+    if (isToday(day)) {
+      onSelectDate(dateStr);
+    } else {
+      setConfirmDate(dateStr);
+    }
+  };
+
+  const formatDisplayDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -118,7 +133,7 @@ export function TaskCalendar({ task, progress, onMonthChange, onSelectDate, onBa
             key={index}
             className={`day-cell ${day === null ? 'empty' : ''} ${day && isToday(day) ? 'today' : ''}`}
             style={day ? { backgroundColor: getCompletionColor(day) } : undefined}
-            onClick={() => day && onSelectDate(getDateString(day))}
+            onClick={() => day && handleDateClick(day)}
           >
             {day && (
               <>
@@ -142,6 +157,26 @@ export function TaskCalendar({ task, progress, onMonthChange, onSelectDate, onBa
           <span>Complete</span>
         </div>
       </div>
+
+      {confirmDate && (
+        <div className="finish-dialog-overlay">
+          <div className="finish-dialog">
+            <h3>Not Today</h3>
+            <p>Do task for {formatDisplayDate(confirmDate)}?</p>
+            <div className="finish-actions">
+              <button className="continue-btn" onClick={() => setConfirmDate(null)}>
+                Cancel
+              </button>
+              <button className="finish-btn" onClick={() => {
+                onSelectDate(confirmDate);
+                setConfirmDate(null);
+              }}>
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

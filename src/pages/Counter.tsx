@@ -15,7 +15,6 @@ import {
   getDefaultTaskCount,
   setDefaultTaskCount,
   resetDefaultTaskCount,
-  DEFAULT_TASK,
 } from '../utils/counterFirebase'
 import type { CounterTask, DayProgress } from '../utils/counterFirebase'
 import './Counter.css'
@@ -26,9 +25,9 @@ function Counter() {
   const { user, loading, login, loginAnonymous } = useAuth()
 
   useSEO({
-    title: 'Tally Counter',
-    description: 'Simple digital tally counter with customizable cooldown. Perfect for counting people, inventory, or any repetitive counting task.',
-    keywords: 'counter, tally counter, click counter, people counter, digital counter, counting app',
+    title: 'Tally Counter | Tasbeeh Counter | عداد التسبيح',
+    description: 'Digital tally counter for general counting, Islamic prayer, tasbeeh, and dhikr. Count أستغفر الله، اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ، لَا إِلٰهَ إِلَّا اللّٰهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ and more.',
+    keywords: 'counter, tally counter, click counter, people counter, digital counter, counting app, tasbeeh counter, tasbih counter, dhikr counter, zikr counter, islamic counter, prayer counter, adhkar counter, muslim counter, digital tasbeeh, عداد تسبيح, عداد الذكر, تسبيح, أذكار, أستغفر الله, اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ, لَا إِلٰهَ إِلَّا اللّٰهُ, سبحان الله, الحمد لله, الله أكبر',
   })
 
   // View state
@@ -112,7 +111,18 @@ function Counter() {
     }
 
     const increment = selectedTask.countAtOnce
-    const newCount = count + increment
+    let newCount = count + increment
+
+    // Cap at target when reaching it for the first time
+    if (
+      selectedTask.targetCount !== null &&
+      !finishShown &&
+      count < selectedTask.targetCount &&
+      newCount > selectedTask.targetCount
+    ) {
+      newCount = selectedTask.targetCount
+    }
+
     setCount(newCount)
 
     // Save to Firestore in background (don't await)
@@ -310,7 +320,7 @@ function Counter() {
       <div className="counter-page">
         <Link to="/" className="back-link">← Back</Link>
         <TaskList
-          tasks={tasksLoading ? [] : [DEFAULT_TASK, ...tasks]}
+          tasks={tasks}
           loading={tasksLoading}
           onSelectTask={handleSelectTask}
           onAddTask={handleAddTask}
