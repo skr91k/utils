@@ -7,6 +7,8 @@ import {
   sendMessage,
   subscribeToMessages,
   uploadFile,
+  isSupportOnline,
+  sendTelegramNotification,
 } from '../utils/chatFirebase'
 import type { ChatMessage } from '../utils/chatFirebase'
 import './ContactUs.css'
@@ -127,6 +129,7 @@ export function ContactUs() {
 
     setSending(true)
     setError(null)
+    const messageText = newMessage.trim()
 
     try {
       // Send app_name message before first message
@@ -139,9 +142,15 @@ export function ContactUs() {
         user.email!,
         user.photoURL,
         'text',
-        newMessage.trim()
+        messageText
       )
       setNewMessage('')
+
+      // Send Telegram notification if support is offline
+      const online = await isSupportOnline()
+      if (!online) {
+        sendTelegramNotification(user.displayName || 'User', messageText, 'text')
+      }
     } catch (err) {
       console.error('Failed to send message:', err)
       setError('Failed to send message. Please try again.')
@@ -189,6 +198,12 @@ export function ContactUs() {
         url,
         file.name
       )
+
+      // Send Telegram notification if support is offline
+      const online = await isSupportOnline()
+      if (!online) {
+        sendTelegramNotification(user.displayName || 'User', file.name, type)
+      }
     } catch (err) {
       console.error('Failed to upload file:', err)
       setError('Failed to upload file. Please try again.')
@@ -281,7 +296,13 @@ export function ContactUs() {
   if (loading) {
     return (
       <div className="contact-page">
-        <Link to="/" className="back-link">Home</Link>
+        <Link to="/" className="back-link">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px', marginBottom: '2px' }}>
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          Home
+        </Link>
         <div className="contact-container">
           <div className="loading-state">Loading...</div>
         </div>
@@ -293,10 +314,17 @@ export function ContactUs() {
   if (!user || !hasEmail) {
     return (
       <div className="contact-page">
-        <Link to="/" className="back-link">Home</Link>
         <div className="contact-container">
           <div className="contact-header-small">
-            <span className="contact-email">{SUPPORT_EMAIL}</span>
+            <div className="header-left">
+              <Link to="/" className="home-icon-link" title="Home">
+                <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+              </Link>
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="contact-email contact-email-link">{SUPPORT_EMAIL}</a>
+            </div>
           </div>
           <div className="login-prompt">
             <h2>Login Required</h2>
@@ -321,16 +349,20 @@ export function ContactUs() {
 
   return (
     <div className="contact-page">
-      <Link to="/" className="back-link">Home</Link>
-
-      <div className="contact-container">
+      <div className="contact-container" style={{ marginTop: '0' }}>
         {/* Header with small contact info */}
         <div className="contact-header-small">
           <div className="header-left">
+            <Link to="/" className="home-icon-link" title="Home">
+              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+            </Link>
             <div className="support-avatar">S</div>
             <div className="support-info">
               <span className="support-name">Support</span>
-              <span className="support-email">{SUPPORT_EMAIL}</span>
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="support-email contact-email-link">{SUPPORT_EMAIL}</a>
             </div>
           </div>
           <div className="header-right">

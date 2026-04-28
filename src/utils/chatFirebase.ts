@@ -231,4 +231,62 @@ export const markMessagesAsRead = async (
   await Promise.all(updates);
 };
 
+// ========================================
+// PRESENCE TRACKING
+// ========================================
+
+// Update support presence (call this periodically from SupportChat)
+export const updateSupportPresence = async (): Promise<void> => {
+  const presenceRef = doc(firestore, 'presence', SUPPORT_UID);
+  await setDoc(presenceRef, {
+    lastSeen: serverTimestamp(),
+    online: true,
+  });
+};
+
+// Check if support is online (lastSeen within 60 seconds)
+export const isSupportOnline = async (): Promise<boolean> => {
+  const presenceRef = doc(firestore, 'presence', SUPPORT_UID);
+  const snapshot = await getDoc(presenceRef);
+
+  if (!snapshot.exists()) return false;
+
+  const data = snapshot.data();
+  if (!data.lastSeen) return false;
+
+  const lastSeen = data.lastSeen.toDate();
+  const now = new Date();
+  const diffSeconds = (now.getTime() - lastSeen.getTime()) / 1000;
+
+  return diffSeconds < 60; // Online if seen within last 60 seconds
+};
+
+// ========================================
+// TELEGRAM NOTIFICATION
+// ========================================
+
+const TELEGRAM_TOKEN = '8645676544:AAEUCmnMYbm5zYz_Dcxyf-XtyYTpVLCho8k';
+const TELEGRAM_CHAT = '833076019';
+
+export const sendTelegramNotification = async (
+  senderName: string,
+  message: string,
+  messageType: string
+): Promise<void> => {
+  try {
+    const text = `💬 New message from ${senderName}\n\n${messageType === 'text' ? message : `[${messageType}]`}`;
+
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT,
+        text: text,
+      }),
+    });
+  } catch (e) {
+    console.log('Failed to send Telegram notification');
+  }
+};
+
 export { firestore };

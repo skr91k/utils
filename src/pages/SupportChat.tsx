@@ -7,6 +7,7 @@ import {
   subscribeToMessages,
   sendMessage,
   uploadFile,
+  updateSupportPresence,
   SUPPORT_UID,
 } from '../utils/chatFirebase'
 import type { ChatMessage, ChatRoom } from '../utils/chatFirebase'
@@ -55,6 +56,21 @@ export function SupportChat() {
 
   // Check if user is support admin
   const isSupport = user?.uid === SUPPORT_UID
+
+  // Update presence every 30 seconds while on this page
+  useEffect(() => {
+    if (!user || !isSupport) return
+
+    // Update immediately
+    updateSupportPresence()
+
+    // Then update every 30 seconds
+    const interval = setInterval(() => {
+      updateSupportPresence()
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [user, isSupport])
 
   // Subscribe to all chat rooms
   useEffect(() => {
@@ -203,7 +219,13 @@ export function SupportChat() {
   if (loading) {
     return (
       <div className="contact-page">
-        <Link to="/" className="back-link">Home</Link>
+        <Link to="/" className="back-link">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px', marginBottom: '2px' }}>
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          Home
+        </Link>
         <div className="contact-container">
           <div className="loading-state">Loading...</div>
         </div>
@@ -214,7 +236,13 @@ export function SupportChat() {
   if (!user) {
     return (
       <div className="contact-page">
-        <Link to="/" className="back-link">Home</Link>
+        <Link to="/" className="back-link">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px', marginBottom: '2px' }}>
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          Home
+        </Link>
         <div className="contact-container">
           <div className="login-prompt">
             <h2>Support Login</h2>
@@ -237,7 +265,13 @@ export function SupportChat() {
   if (!isSupport) {
     return (
       <div className="contact-page">
-        <Link to="/" className="back-link">Home</Link>
+        <Link to="/" className="back-link">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px', marginBottom: '2px' }}>
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          Home
+        </Link>
         <div className="contact-container">
           <div className="login-prompt">
             <h2>Access Denied</h2>
@@ -250,12 +284,18 @@ export function SupportChat() {
 
   return (
     <div className="contact-page support-page">
-      <Link to="/" className="back-link">Home</Link>
-
       <div className="support-layout">
         {/* Chat Rooms List */}
         <div className="chat-rooms-list">
-          <h3>Conversations</h3>
+          <div style={{ display: 'flex', alignItems: 'center', background: '#252525', borderBottom: '1px solid #333' }}>
+            <Link to="/" className="home-icon-link" title="Home" style={{ paddingLeft: '16px' }}>
+              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+            </Link>
+            <h3 style={{ borderBottom: 'none', background: 'transparent' }}>Conversations</h3>
+          </div>
           {chatRooms.length === 0 ? (
             <div className="no-chats">No conversations yet</div>
           ) : (
@@ -282,7 +322,7 @@ export function SupportChat() {
         </div>
 
         {/* Chat Area */}
-        <div className="contact-container">
+        <div className="contact-container" style={{ marginTop: '0' }}>
           {!selectedRoom ? (
             <div className="empty-chat">
               <p>Select a conversation</p>

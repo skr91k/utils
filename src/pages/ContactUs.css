@@ -78,6 +78,16 @@
   color: #888;
 }
 
+.contact-email-link {
+  text-decoration: none;
+  color: #888;
+}
+
+.contact-email-link:hover {
+  color: #bb86fc;
+  text-decoration: underline;
+}
+
 .header-right {
   display: flex;
   align-items: center;
@@ -577,4 +587,17 @@
     max-height: 200px;
     overflow-y: auto;
   }
+}
+
+.home-icon-link {
+  color: #bb86fc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  transition: color 0.2s;
+}
+
+.home-icon-link:hover {
+  color: #9a67ea;
 }

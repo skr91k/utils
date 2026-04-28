@@ -92,6 +92,16 @@ service cloud.firestore {
       }
     }
 
+    // ========================================
+    // PRESENCE TRACKING
+    // ========================================
+
+    // Presence collection - support can write, authenticated users can read
+    match /presence/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isSupportAdmin();
+    }
+
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;
